@@ -1,2 +1,6 @@
 .env
 *.db
+.venv
+.venv-1
+.venv-2
+
