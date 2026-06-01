@@ -1,6 +1,7 @@
 import sqlite3
+from pathlib import Path
 
-DB_PATH = "data/resma.db"
+DB_PATH = Path(__file__).parent.parent / "data" / "resma.db"
 
 def get_connection():
     conn = sqlite3.connect(DB_PATH)

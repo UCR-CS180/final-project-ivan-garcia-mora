@@ -3,7 +3,7 @@ import json
 import uuid
 import os
 
-DB_PATH = os.path.join(os.path.dirname(__file__), "..", "data", "researchmatch.db")
+DB_PATH = os.path.join(os.path.dirname(__file__), "..", "data", "resma.db")
 
 
 def get_connection():
