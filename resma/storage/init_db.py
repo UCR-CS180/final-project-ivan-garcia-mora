@@ -87,3 +87,6 @@ if __name__ == "__main__":
     seed_abstracts(conn)
     conn.close()
     print(f"Database ready at: {os.path.abspath(DB_PATH)}")
+    
+from storage.email_history import init_email_history_table
+init_email_history_table()

@@ -5,13 +5,20 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 import streamlit as st
 from engine.profile_service import submit_profile, fetch_profile_by_email
 from engine.matching_service import run_matching, refresh_matches
+from engine.simplifier import simplify_abstract
+from engine.email_generator import generate_outreach_email
 from storage.abstracts import get_abstract_by_id
+from storage.profiles import get_profile
+from storage.email_history import save_email_draft, get_email_history
 
-st.set_page_config(page_title="ResMa AI", page_icon="🔬")
-st.title("🔬 ResMa AI")
+st.set_page_config(page_title="ResMAI", page_icon="🔬")
+st.title("🔬 ResMAI")
 st.caption("Find UCR research opportunities matched to your skills and interests.")
 
-page = st.sidebar.radio("Navigate", ["Create Profile", "Find Matches", "Look Up Profile"])
+page = st.sidebar.radio(
+    "Navigate",
+    ["Create Profile", "Find Matches", "Email History", "Look Up Profile"]
+)
 
 # ─────────────────────────────────────────────
 # PAGE: Create Profile
@@ -92,37 +99,16 @@ elif page == "Find Matches":
         if not profile_id:
             st.warning("Please enter your student ID.")
         else:
-            use_cache = not refresh
-
             with st.spinner("Matching you with research opportunities..."):
-                result = run_matching(profile_id, use_cache=use_cache) \
-                    if not refresh else refresh_matches(profile_id)
+                result = refresh_matches(profile_id) if refresh \
+                    else run_matching(profile_id, use_cache=True)
 
             if result["status"] == "success":
-                matches = result["data"]["matches"]
-                from_cache = result["data"].get("from_cache", False)
-
-                st.success(f"Found {len(matches)} matches!")
-                if from_cache:
-                    st.caption("Showing cached results. Click 'Refresh Results' to re-run matching.")
-
-                for match in matches:
-                    abstract_result = get_abstract_by_id(match["abstract_id"])
-
-                    if abstract_result["status"] == "success":
-                        ab = abstract_result["data"]
-
-                        with st.expander(f"#{match['rank']} — {ab['title']}"):
-                            st.write(f"**Lab:** {ab['lab'] or 'N/A'}")
-                            st.write(f"**Professor:** {ab['professor'] or 'N/A'}")
-                            st.write(f"**Department:** {ab['department'] or 'N/A'}")
-                            st.write(f"**Keywords:** {', '.join(ab['keywords'])}")
-                            st.divider()
-                            st.write(f"**Why this matches you:**")
-                            st.info(match["reason"])
-                            st.divider()
-                            st.write(f"**Abstract:**")
-                            st.write(ab["text"])
+                st.session_state["matches"] = result["data"]["matches"]
+                st.session_state["matches_from_cache"] = result["data"].get("from_cache", False)
+                st.session_state["matches_profile_id"] = profile_id
+                st.session_state["simplify_results"] = {}
+                st.session_state["email_results"] = {}
 
             elif result["status"] == "not_found":
                 st.error("Student ID not found. Please create a profile first.")
@@ -137,6 +123,121 @@ elif page == "Find Matches":
 
             else:
                 st.error(f"Something went wrong: {result.get('message', 'unknown error')}")
+
+    if "matches" in st.session_state and st.session_state.get("matches_profile_id") == profile_id:
+        matches = st.session_state["matches"]
+        from_cache = st.session_state.get("matches_from_cache", False)
+
+        st.success(f"Found {len(matches)} matches!")
+        if from_cache:
+            st.caption("Showing cached results. Click 'Refresh Results' to re-run matching.")
+
+        profile_result = get_profile(profile_id)
+        profile_data = profile_result["data"] if profile_result["status"] == "success" else {}
+
+        for match in matches:
+            abstract_result = get_abstract_by_id(match["abstract_id"])
+            if abstract_result["status"] != "success":
+                continue
+
+            ab = abstract_result["data"]
+            ab_id = match["abstract_id"]
+
+            with st.expander(f"#{match['rank']} — {ab['title']}"):
+                st.write(f"**Lab:** {ab['lab'] or 'N/A'}")
+                st.write(f"**Professor:** {ab['professor'] or 'N/A'}")
+                st.write(f"**Department:** {ab['department'] or 'N/A'}")
+                st.write(f"**Keywords:** {', '.join(ab['keywords'])}")
+                st.divider()
+                st.write("**Why this matches you:**")
+                st.info(match["reason"])
+                st.divider()
+                st.write("**Abstract:**")
+                st.write(ab["text"])
+                st.divider()
+
+                # ── Simplify Button ──
+                if st.button("✨ Simplify This Abstract", key=f"simplify_{ab_id}"):
+                    with st.spinner("Simplifying..."):
+                        sim_result = simplify_abstract(ab["text"])
+                    if sim_result["status"] == "success":
+                        st.session_state.setdefault("simplify_results", {})[ab_id] = sim_result["data"]["bullets"]
+                    else:
+                        st.error(f"Could not simplify: {sim_result.get('message', '')}")
+
+                if ab_id in st.session_state.get("simplify_results", {}):
+                    st.subheader("Simplified Summary")
+                    for bullet in st.session_state["simplify_results"][ab_id]:
+                        st.write(f"• {bullet}")
+
+                # ── Email Generator Button ──
+                if st.button("📧 Generate Outreach Email", key=f"email_{ab_id}"):
+                    if not profile_data:
+                        st.error("Could not load your profile. Check your student ID.")
+                    else:
+                        with st.spinner("Drafting your email..."):
+                            email_result = generate_outreach_email(profile_data, ab)
+
+                        if email_result["status"] == "success":
+                            st.session_state.setdefault("email_results", {})[ab_id] = email_result["data"]
+                            save_email_draft(
+                                profile_id,
+                                ab_id,
+                                email_result["data"]["subject"],
+                                email_result["data"]["body"]
+                            )
+                            st.caption("Draft saved to your Email History.")
+                        elif email_result["status"] == "incomplete":
+                            st.warning(f"Missing info: {', '.join(email_result['missing'])}")
+                            st.caption("Make sure the abstract has a professor name.")
+                        else:
+                            st.error(f"Could not generate email: {email_result.get('message', '')}")
+
+                if ab_id in st.session_state.get("email_results", {}):
+                    draft = st.session_state["email_results"][ab_id]
+                    st.subheader("📬 Your Outreach Email Draft")
+                    st.write(f"**Subject:** {draft['subject']}")
+                    st.text_area("Email Body", value=draft["body"], height=300, key=f"body_{ab_id}")
+
+# ─────────────────────────────────────────────
+# PAGE: Email History
+# ─────────────────────────────────────────────
+elif page == "Email History":
+    st.header("📬 Saved Email Drafts")
+    st.write("View all outreach emails you have generated.")
+
+    profile_id = st.text_input("Student ID", placeholder="e.g. student_abc12345")
+    load = st.button("Load History", type="primary")
+
+    if load:
+        if not profile_id:
+            st.warning("Please enter your student ID.")
+        else:
+            result = get_email_history(profile_id)
+
+            if result["status"] == "success":
+                drafts = result["data"]
+                st.success(f"{len(drafts)} saved draft(s) found.")
+
+                for draft in drafts:
+                    ab_result = get_abstract_by_id(draft["abstract_id"])
+                    ab_title = ab_result["data"]["title"] \
+                        if ab_result["status"] == "success" else draft["abstract_id"]
+
+                    with st.expander(f"{draft['subject']} — {ab_title}"):
+                        st.caption(f"Generated: {draft['created_at']}")
+                        st.write(f"**Subject:** {draft['subject']}")
+                        st.text_area(
+                            "Email Body",
+                            value=draft["body"],
+                            height=250,
+                            key=f"history_{draft['id']}"
+                        )
+
+            elif result["status"] == "not_found":
+                st.info("No saved drafts yet. Generate emails from the Find Matches page.")
+            else:
+                st.error(f"Something went wrong: {result.get('message', '')}")
 
 # ─────────────────────────────────────────────
 # PAGE: Look Up Profile
