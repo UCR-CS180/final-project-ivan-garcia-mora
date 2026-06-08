@@ -1,5 +1,6 @@
 import json
 import os
+import time
 from dotenv import load_dotenv
 from google import genai
 from engine.prompts import build_match_prompt
@@ -42,25 +43,29 @@ def call_gemini_match(profile: dict, abstracts: list) -> dict:
 
     prompt = build_match_prompt(profile, abstracts)
 
-    try:
-        response = _client.models.generate_content(model=_MODEL, contents=prompt)
-        raw_text = response.text
+    for attempt in range(3):
+        try:
+            response = _client.models.generate_content(model=_MODEL, contents=prompt)
+            raw_text = response.text
 
-        parsed = _parse_gemini_json(raw_text)
-        matches = parsed.get("matches", [])
+            parsed = _parse_gemini_json(raw_text)
+            matches = parsed.get("matches", [])
 
-        if not matches:
+            if not matches:
+                return {
+                    "status": "no_matches",
+                    "message": "No relevant matches found. Try broadening your interests."
+                }
+
+            return {"status": "success", "data": {"matches": matches}}
+
+        except json.JSONDecodeError:
             return {
-                "status": "no_matches",
-                "message": "No relevant matches found. Try broadening your interests."
+                "status": "engine_error",
+                "message": "Gemini returned an unparseable response. Try again."
             }
-
-        return {"status": "success", "data": {"matches": matches}}
-
-    except json.JSONDecodeError:
-        return {
-            "status": "engine_error",
-            "message": "Gemini returned an unparseable response. Try again."
-        }
-    except Exception as e:
-        return {"status": "engine_error", "message": str(e)}
+        except Exception as e:
+            if attempt < 2 and ("503" in str(e) or "UNAVAILABLE" in str(e)):
+                time.sleep(3 * (attempt + 1))
+                continue
+            return {"status": "engine_error", "message": str(e)}

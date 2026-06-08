@@ -16,12 +16,13 @@ def save_profile(profile: dict) -> dict:
     """
     Save a validated student profile to the database.
 
-    Expected profile fields:
-        email, major, year, interests (list), skills (list)
+    Args:
+        profile (dict): Validated profile with keys — email (str), major (str),
+            year (str), interests (list[str]), skills (list[str]).
 
     Returns:
         {"status": "success", "id": "student_xxx"}
-        {"status": "exists", "message": "duplicate email"}
+        {"status": "exists", "message": "an account with that email already exists"}
         {"status": "db_error", "message": "..."}
     """
     try:

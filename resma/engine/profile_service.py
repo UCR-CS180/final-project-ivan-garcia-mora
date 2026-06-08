@@ -4,9 +4,11 @@ from storage.profiles import save_profile, get_profile, get_profile_by_email
 
 def submit_profile(raw_input: dict) -> dict:
     """
-    Full profile submission pipeline:
-    1. Validate and normalize raw input
-    2. Save to storage if valid
+    Validate and save a new student profile.
+
+    Args:
+        raw_input (dict): Raw form fields — email (str), major (str),
+            year (str), interests (str), skills (str).
 
     Returns:
         {"status": "success", "id": "student_xxx"}

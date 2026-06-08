@@ -7,6 +7,7 @@ from engine.profile_service import submit_profile, fetch_profile_by_email
 from engine.matching_service import run_matching, refresh_matches
 from engine.simplifier import simplify_abstract
 from engine.email_generator import generate_outreach_email
+from engine.faq_engine import get_faq_response
 from storage.abstracts import get_abstract_by_id
 from storage.profiles import get_profile
 from storage.email_history import save_email_draft, get_email_history
@@ -17,7 +18,7 @@ st.caption("Find UCR research opportunities matched to your skills and interests
 
 page = st.sidebar.radio(
     "Navigate",
-    ["Create Profile", "Find Matches", "Email History", "Look Up Profile"]
+    ["Create Profile", "Find Matches", "Email History", "Look Up Profile", "FAQ"]
 )
 
 # ─────────────────────────────────────────────
@@ -47,7 +48,7 @@ if page == "Create Profile":
 
     email = st.text_input(
         "UCR Email",
-        placeholder="e.g. igarc001@ucr.edu"
+        placeholder="e.g. example001@ucr.edu"
     )
 
     submitted = st.button("Save Profile", type="primary")
@@ -246,7 +247,7 @@ elif page == "Look Up Profile":
     st.header("Look Up Your Profile")
     st.write("Enter your UCR email to retrieve your student ID.")
 
-    email_lookup = st.text_input("UCR Email", placeholder="e.g. igarc001@ucr.edu")
+    email_lookup = st.text_input("UCR Email", placeholder="e.g. example001@ucr.edu")
     lookup = st.button("Look Up", type="primary")
 
     if lookup:
@@ -270,5 +271,31 @@ elif page == "Look Up Profile":
                 st.error("No profile found with that email.")
                 st.caption("Head to 'Create Profile' to get started.")
 
+            else:
+                st.error(f"Something went wrong: {result.get('message', 'unknown error')}")
+
+# ─────────────────────────────────────────────
+# PAGE: FAQ
+# ─────────────────────────────────────────────
+elif page == "FAQ":
+    st.header("FAQ")
+    st.write("Ask anything about ResMAI or UCR undergraduate research.")
+
+    question = st.text_input("Your question", placeholder="e.g. How does matching work?")
+    ask = st.button("Ask", type="primary")
+
+    if ask:
+        if not question.strip():
+            st.warning("Please enter a question.")
+        else:
+            with st.spinner("Looking that up..."):
+                result = get_faq_response(question)
+
+            if result["status"] == "success":
+                st.info(result["data"]["answer"])
+            elif result["status"] == "not_found":
+                st.warning(result["message"])
+            elif result["status"] == "invalid_input":
+                st.warning(result["message"])
             else:
                 st.error(f"Something went wrong: {result.get('message', 'unknown error')}")

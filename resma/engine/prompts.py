@@ -70,6 +70,38 @@ Abstract:
 """
 
 
+def build_faq_prompt(user_query: str) -> str:
+    """
+    Build the Gemini prompt for answering a student FAQ about ResMAI
+    and UCR undergraduate research.
+    """
+    return f"""
+You are a helpful assistant for ResMAI, a web app that matches UCR undergraduate students
+with faculty research opportunities.
+
+You can answer questions about:
+- How to use ResMAI (creating a profile, finding matches, generating emails)
+- General UCR undergraduate research (how to get involved, what to expect, cold-emailing professors)
+- What the app does and how matching works
+
+If the question is completely unrelated to research, UCR, or this app, set "found" to false.
+
+Return ONLY this exact JSON format with no extra text, no markdown, no code fences:
+{{
+  "found": true,
+  "answer": "your answer here"
+}}
+
+If you cannot answer, return:
+{{
+  "found": false,
+  "answer": ""
+}}
+
+Student question: {user_query}
+"""
+
+
 def build_email_prompt(profile: dict, abstract: dict) -> str:
     """
     Build the Gemini prompt for generating a professional
