@@ -4,6 +4,18 @@ ResMAI is a Streamlit web app that matches UCR students with faculty research op
 
 ---
 
+## Repository Overview
+
+| | Path |
+|---|---|
+| Source code | [resma/](resma/) |
+| Tests | [resma/tests/](resma/tests/) |
+| Requirement specification | [FUNCTIONALITY.md](FUNCTIONALITY.md) |
+| Design document | [CONTRACT.md](CONTRACT.md) |
+| Demo video |https://youtu.be/Wc5PvdlOc2k |
+
+---
+
 ## Setup
 
 ### 1. Install dependencies
